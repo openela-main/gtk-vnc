@@ -1,0 +1,63 @@
+From 9fc84302bb18ffb552f2405df7820df9c4bfa2ec Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Wed, 9 Jan 2019 14:01:22 +0100
+Subject: [PATCH] sasl: Factor common code auth failure
+
+The new vnc_connection_auth_failure() method will be reused in the
+next commit.
+
+Signed-off-by: Christophe Fergeau <cfergeau@redhat.com>
+(cherry picked from commit 83cac0cbe8b8006c50d177650459aaa47f1fd129)
+Resolves: rhbz#1688275
+---
+ src/vncconnection.c | 17 +++++++++++------
+ 1 file changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/src/vncconnection.c b/src/vncconnection.c
+index afc1418..58455df 100644
+--- a/src/vncconnection.c
++++ b/src/vncconnection.c
+@@ -124,6 +124,7 @@ static void vnc_connection_close(VncConnection *conn);
+ static void vnc_connection_set_error(VncConnection *conn,
+                                      const char *format,
+                                      ...) G_GNUC_PRINTF(2, 3);
++static void vnc_connection_auth_failure(VncConnection *conn, const char *reason);
+ 
+ /*
+  * A special GSource impl which allows us to wait on a certain
+@@ -660,6 +661,14 @@ static G_GNUC_PRINTF(2, 3) void vnc_connection_set_error(VncConnection *conn,
+     vnc_connection_emit_main_context(conn, VNC_ERROR, &s);
+ }
+ 
++static void vnc_connection_auth_failure(VncConnection *conn,
++                                        const char *reason)
++{
++    struct signal_data sigdata;
++
++    sigdata.params.authReason = reason;
++    vnc_connection_emit_main_context(conn, VNC_AUTH_FAILURE, &sigdata);
++}
+ 
+ static gboolean vnc_connection_use_compression(VncConnection *conn)
+ {
+@@ -3571,18 +3580,14 @@ static gboolean vnc_connection_check_auth_result(VncConnection *conn)
+         reason[len] = '\0';
+         VNC_DEBUG("Fail %s", reason);
+         if (!priv->coroutine_stop) {
+-            struct signal_data sigdata;
+-            sigdata.params.authReason = reason;
+             vnc_connection_set_error(conn, "%s", reason);
+-            vnc_connection_emit_main_context(conn, VNC_AUTH_FAILURE, &sigdata);
++            vnc_connection_auth_failure(conn, reason);
+         }
+     } else {
+         VNC_DEBUG("Fail auth no result");
+         if (!priv->coroutine_stop) {
+-            struct signal_data sigdata;
+-            sigdata.params.authReason = "Unknown authentication failure";
+             vnc_connection_set_error(conn, "%s", "Unknown authentication failure");
+-            vnc_connection_emit_main_context(conn, VNC_AUTH_FAILURE, &sigdata);
++            vnc_connection_auth_failure(conn, "Unknown authentication failure");
+         }
+     }
+     return FALSE;

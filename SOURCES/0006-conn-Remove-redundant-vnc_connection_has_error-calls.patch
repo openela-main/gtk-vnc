@@ -1,0 +1,73 @@
+From 74fcc039b313a0d3b91d15b83b4d4df4aa84536e Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Wed, 9 Jan 2019 14:01:25 +0100
+Subject: [PATCH] conn: Remove redundant vnc_connection_has_error() calls
+
+No need to call it twice in:
+if (vnc_connection_has_error(conn))
+    return !vnc_connection_has_error(conn);
+
+and no need to call it after calling vnc_connection_set_error() as it
+will always return TRUE in this scenario.
+
+Signed-off-by: Christophe Fergeau <cfergeau@redhat.com>
+(cherry picked from commit 247eaddd7455ee4eb80efe4971167ab0636a4509)
+Resolves: rhbz#1688275
+---
+ src/vncconnection.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/src/vncconnection.c b/src/vncconnection.c
+index 65111fd..fd7468b 100644
+--- a/src/vncconnection.c
++++ b/src/vncconnection.c
+@@ -3120,7 +3120,7 @@ static gboolean vnc_connection_framebuffer_update(VncConnection *conn, gint32 et
+               etype, width, height, x, y);
+ 
+     if (vnc_connection_has_error(conn))
+-        return !vnc_connection_has_error(conn);
++        return FALSE;
+ 
+     switch (etype) {
+     case VNC_CONNECTION_ENCODING_RAW:
+@@ -3292,7 +3292,7 @@ static gboolean vnc_connection_server_message(VncConnection *conn)
+     int ret;
+ 
+     if (vnc_connection_has_error(conn))
+-        return !vnc_connection_has_error(conn);
++        return FALSE;
+ 
+     /* NB: make sure that all server message functions
+        handle has_error appropriately */
+@@ -5838,7 +5838,7 @@ gboolean vnc_connection_set_auth_type(VncConnection *conn, unsigned int type)
+     VNC_DEBUG("Thinking about auth type %u", type);
+     if (priv->auth_type != VNC_CONNECTION_AUTH_INVALID) {
+         vnc_connection_set_error(conn, "%s", "Auth type has already been set");
+-        return !vnc_connection_has_error(conn);
++        return FALSE;
+     }
+     if (type != VNC_CONNECTION_AUTH_NONE &&
+         type != VNC_CONNECTION_AUTH_VNC &&
+@@ -5851,7 +5851,7 @@ gboolean vnc_connection_set_auth_type(VncConnection *conn, unsigned int type)
+         vnc_connection_set_error(conn, "Auth type %u is not supported",
+                                  type);
+         g_signal_emit(conn, VNC_AUTH_UNSUPPORTED, 0, type);
+-        return !vnc_connection_has_error(conn);
++        return FALSE;
+     }
+     VNC_DEBUG("Decided on auth type %u", type);
+     priv->auth_type = type;
+@@ -5880,11 +5880,11 @@ gboolean vnc_connection_set_auth_subtype(VncConnection *conn, unsigned int type)
+         priv->auth_type != VNC_CONNECTION_AUTH_TLS) {
+         vnc_connection_set_error(conn, "Auth type %u does not support subauth",
+                                  priv->auth_type);
+-        return !vnc_connection_has_error(conn);
++        return FALSE;
+     }
+     if (priv->auth_subtype != VNC_CONNECTION_AUTH_INVALID) {
+         vnc_connection_set_error(conn, "%s", "Auth subtype has already been set");
+-        return !vnc_connection_has_error(conn);
++        return FALSE;
+     }
+     priv->auth_subtype = type;
+ 

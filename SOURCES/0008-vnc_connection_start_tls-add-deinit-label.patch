@@ -1,0 +1,75 @@
+From a820d8623e5eae48cb08b624c85fc846a198df16 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?J=C3=A1n=20Tomko?= <jtomko@redhat.com>
+Date: Fri, 11 Jan 2019 16:34:30 +0100
+Subject: [PATCH] vnc_connection_start_tls: add deinit label
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Introduce a deinit label to unify cleanup paths which call gnutls_deinit.
+
+Signed-off-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit e62d010777eecda47829e9da54bad3387f4d6231)
+Resolves: rhbz#1665837
+---
+ src/vncconnection.c | 19 +++++++++----------
+ 1 file changed, 9 insertions(+), 10 deletions(-)
+
+diff --git a/src/vncconnection.c b/src/vncconnection.c
+index bbf4373..7b15211 100644
+--- a/src/vncconnection.c
++++ b/src/vncconnection.c
+@@ -4445,22 +4445,19 @@ static gboolean vnc_connection_start_tls(VncConnection *conn, int anonTLS)
+         }
+ 
+         if (gnutls_priority_set_direct(priv->tls_session, priority, NULL) < 0) {
+-            gnutls_deinit(priv->tls_session);
+             vnc_connection_set_error(conn, "%s", "Failed to set priority");
+-            return FALSE;
++            goto deinit;
+         }
+ 
+         if (anonTLS) {
+             gnutls_anon_client_credentials anon_cred = vnc_connection_tls_initialize_anon_cred();
+             if (!anon_cred) {
+-                gnutls_deinit(priv->tls_session);
+                 vnc_connection_set_error(conn, "%s", "Failed to allocate credentials");
+-                return FALSE;
++                goto deinit;
+             }
+             if (gnutls_credentials_set(priv->tls_session, GNUTLS_CRD_ANON, anon_cred) < 0) {
+-                gnutls_deinit(priv->tls_session);
+                 vnc_connection_set_error(conn, "%s", "Failed to initialize credentials");
+-                return FALSE;
++                goto deinit;
+             }
+         } else {
+             priv->want_cred_password = FALSE;
+@@ -4471,14 +4468,12 @@ static gboolean vnc_connection_start_tls(VncConnection *conn, int anonTLS)
+ 
+             gnutls_certificate_credentials_t x509_cred = vnc_connection_tls_initialize_cert_cred(conn);
+             if (!x509_cred) {
+-                gnutls_deinit(priv->tls_session);
+                 vnc_connection_set_error(conn, "%s", "Failed to allocate credentials");
+-                return FALSE;
++                goto deinit;
+             }
+             if (gnutls_credentials_set(priv->tls_session, GNUTLS_CRD_CERTIFICATE, x509_cred) < 0) {
+-                gnutls_deinit(priv->tls_session);
+                 vnc_connection_set_error(conn, "%s", "Failed to initialize credentials");
+-                return FALSE;
++                goto deinit;
+             }
+         }
+ 
+@@ -4514,6 +4509,10 @@ static gboolean vnc_connection_start_tls(VncConnection *conn, int anonTLS)
+         }
+         return TRUE;
+     }
++
++ deinit:
++    gnutls_deinit(priv->tls_session);
++    return FALSE;
+ }
+ 
+ static gboolean vnc_connection_has_auth_subtype(gpointer data)
