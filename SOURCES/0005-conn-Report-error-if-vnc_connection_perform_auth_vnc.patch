@@ -1,0 +1,66 @@
+From bfc434015456687388370ccfc0fc92fd54c58b4b Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Wed, 9 Jan 2019 14:01:24 +0100
+Subject: [PATCH] conn: Report error if vnc_connection_perform_auth_vnc fails
+
+At the moment, when the various crypto operations that
+vnc_connection_perform_auth_vnc performs fail, no error is reported to
+the client application. This commit adds the emission of a vnc-error
+signal when this happens. This is not reported as an auth failure as
+these errors are not something which is recoverable, they indicate
+system failures.
+
+Signed-off-by: Christophe Fergeau <cfergeau@redhat.com>
+(cherry picked from commit fa21beab5b44354c890699663a71b07d6ce18d40)
+Resolves: rhbz#1688275
+---
+ src/vncconnection.c | 13 +++++++++----
+ 1 file changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/src/vncconnection.c b/src/vncconnection.c
+index aceb31d..65111fd 100644
+--- a/src/vncconnection.c
++++ b/src/vncconnection.c
+@@ -3638,33 +3638,38 @@ static gboolean vnc_connection_perform_auth_vnc(VncConnection *conn)
+     error = gcry_cipher_open(&c, GCRY_CIPHER_DES, GCRY_CIPHER_MODE_ECB, 0);
+     if (gcry_err_code (error) != GPG_ERR_NO_ERROR) {
+         VNC_DEBUG("gcry_cipher_open error: %s\n", gcry_strerror(error));
+-        return FALSE;
++        goto error;
+     }
+ 
+     error = gcry_cipher_setkey(c, key, 8);
+     if (gcry_err_code (error) != GPG_ERR_NO_ERROR) {
+         VNC_DEBUG("gcry_cipher_setkey error: %s\n", gcry_strerror(error));
+         gcry_cipher_close(c);
+-        return FALSE;
++        goto error;
+     }
+ 
+     error = gcry_cipher_encrypt(c, challenge, 8, challenge, 8);
+     if (gcry_err_code (error) != GPG_ERR_NO_ERROR) {
+         VNC_DEBUG("gcry_cipher_encrypt error: %s\n", gcry_strerror(error));
+         gcry_cipher_close(c);
+-        return FALSE;
++        goto error;
+     }
+     error = gcry_cipher_encrypt(c, challenge + 8, 8, challenge + 8, 8);
+     if (gcry_err_code (error) != GPG_ERR_NO_ERROR) {
+         VNC_DEBUG("gcry_cipher_encrypt error: %s\n", gcry_strerror(error));
+         gcry_cipher_close(c);
+-        return FALSE;
++        goto error;
+     }
+     gcry_cipher_close(c);
+ 
+     vnc_connection_write(conn, challenge, 16);
+     vnc_connection_flush(conn);
+     return vnc_connection_check_auth_result(conn);
++
++error:
++    vnc_connection_set_error(conn, "%s: %s", "Unknown authentication failure: %s",
++                             gcry_strerror(error));
++    return FALSE;
+ }
+ 
+ /*

@@ -1,0 +1,33 @@
+From 9cadf0ab5071d14066af233a11f994b166454267 Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Wed, 9 Jan 2019 14:01:23 +0100
+Subject: [PATCH] sasl: Emit vnc-auth-failure signal on SASL auth failures
+
+When the SASL username or password are wrong, at the moment client
+application will not get any specific notification for it, they will
+just know that the remote connection was closed because of an error.
+
+This commit adds the emission of the vnc-auth-failure signal when
+vnc_connection_perform_auth_sasl() fails.
+
+https://bugzilla.redhat.com/show_bug.cgi?id=1456175
+
+Signed-off-by: Christophe Fergeau <cfergeau@redhat.com>
+(cherry picked from commit 3f4f79ffbf74f31ae65055c03a8eb523ac631422)
+Resolves: rhbz#1688275
+---
+ src/vncconnection.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/vncconnection.c b/src/vncconnection.c
+index 58455df..aceb31d 100644
+--- a/src/vncconnection.c
++++ b/src/vncconnection.c
+@@ -4419,6 +4419,7 @@ static gboolean vnc_connection_perform_auth_sasl(VncConnection *conn)
+  error:
+     if (saslconn)
+         sasl_dispose(&saslconn);
++    vnc_connection_auth_failure(conn, "Unknown authentication failure");
+     return FALSE;
+ }
+ #endif /* HAVE_SASL */

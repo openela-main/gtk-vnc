@@ -1,0 +1,60 @@
+From 47fdacf72c35cb89071084171e020b4846b3fbd6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?J=C3=A1n=20Tomko?= <jtomko@redhat.com>
+Date: Fri, 11 Jan 2019 16:34:31 +0100
+Subject: [PATCH] vnc_connection_start_tls: set tls_session to NULL after
+ deinit
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Avoid a double free in case of a failure, e.g. when vnc_connection_tls_initialize_cert_cred
+fails to read the certificate:
+
+==1154== Invalid read of size 4
+==1154==    at 0x60870FB: gnutls_bye (record.c:288)
+==1154==    by 0x4A46B73: vnc_connection_close (vncconnection.c:5120)
+==1154==    by 0x4A4E6CA: vnc_connection_coroutine (vncconnection.c:5650)
+==1154==    by 0x4A51BCE: coroutine_trampoline (coroutine_ucontext.c:55)
+==1154==    by 0x5BD81FF: ??? (in /usr/lib64/libc-2.28.so)
+==1154==    by 0x175DB277: ???
+==1154==  Address 0x1847fcf0 is 384 bytes inside a block of size 6,496 free'd
+==1154==    at 0x4839A0C: free (vg_replace_malloc.c:540)
+==1154==    by 0x4A4B019: vnc_connection_start_tls (vncconnection.c:4466)
+==1154==    by 0x4A4CBE8: vnc_connection_perform_auth_vencrypt (vncconnection.c:4708)
+==1154==    by 0x4A4CBE8: vnc_connection_perform_auth (vncconnection.c:4818)
+==1154==    by 0x4A4CBE8: vnc_connection_initialize (vncconnection.c:5415)
+==1154==    by 0x4A4E50F: vnc_connection_coroutine (vncconnection.c:5639)
+==1154==    by 0x4A51BCE: coroutine_trampoline (coroutine_ucontext.c:55)
+==1154==    by 0x5BD81FF: ??? (in /usr/lib64/libc-2.28.so)
+==1154==    by 0x175DB277: ???
+==1154==  Block was alloc'd at
+==1154==    at 0x483AB1A: calloc (vg_replace_malloc.c:762)
+==1154==    by 0x60B6FDE: gnutls_init (state.c:465)
+==1154==    by 0x4A4AB28: vnc_connection_start_tls (vncconnection.c:4434)
+==1154==    by 0x4A4CBE8: vnc_connection_perform_auth_vencrypt (vncconnection.c:4708)
+==1154==    by 0x4A4CBE8: vnc_connection_perform_auth (vncconnection.c:4818)
+==1154==    by 0x4A4CBE8: vnc_connection_initialize (vncconnection.c:5415)
+==1154==    by 0x4A4E50F: vnc_connection_coroutine (vncconnection.c:5639)
+==1154==    by 0x4A51BCE: coroutine_trampoline (coroutine_ucontext.c:55)
+==1154==    by 0x5BD81FF: ??? (in /usr/lib64/libc-2.28.so)
+==1154==    by 0x175DB277: ???
+
+Signed-off-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit 7879ae9c747b4e95bb3850c4e67ca57d3ded82e3)
+Resolves: rhbz#1665837
+---
+ src/vncconnection.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/vncconnection.c b/src/vncconnection.c
+index 7b15211..5321731 100644
+--- a/src/vncconnection.c
++++ b/src/vncconnection.c
+@@ -4512,6 +4512,7 @@ static gboolean vnc_connection_start_tls(VncConnection *conn, int anonTLS)
+ 
+  deinit:
+     gnutls_deinit(priv->tls_session);
++    priv->tls_session = NULL;
+     return FALSE;
+ }
+ 
